@@ -1,216 +1,59 @@
-(() => {
-  'use strict';
-
-  document.addEventListener('DOMContentLoaded', async () => {
-    const db = window.PF_SUPABASE;
-    const $ = (s) => document.querySelector(s);
-    const $$ = (s) => [...document.querySelectorAll(s)];
-    const newBtn = $('#newProjectBtn');
-    const form = $('#projectForm');
-    const list = $('#projectList');
-    const modal = $('#projectModal');
-
-    if (!db || !newBtn || !form || !list || !modal) return;
-
-    // admin.js ya está funcionando: no duplicamos sus listeners.
-    if (typeof newBtn.onclick === 'function') return;
-
-    let projects = [];
-
-    const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (m) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[m]));
-
-    const escAttr = esc;
-
-    const setStatus = (text, ok = false) => {
-      const el = $('#projectStatus');
-      if (!el) return;
-      el.textContent = text;
-      el.className = `form-status ${ok ? 'good' : ''}`;
-    };
-
-    const setCount = () => {
-      const el = $('#countProjects');
-      if (el) el.textContent = String(projects.length);
-    };
-
-    const showPanel = (id) => {
-      $$('.panel').forEach((panel) => {
-        panel.classList.toggle('active-panel', panel.id === id);
-      });
-      $$('.side-link').forEach((link) => {
-        link.classList.toggle('active', link.dataset.panel === id);
-      });
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-
-    $$('.side-link').forEach((link) => {
-      link.addEventListener('click', () => showPanel(link.dataset.panel));
-    });
-    $$('[data-panel-target]').forEach((button) => {
-      button.addEventListener('click', () => showPanel(button.dataset.panelTarget));
-    });
-
-    const loadProjects = async () => {
-      list.innerHTML = '<div class="empty-table"><p>CARGANDO PROYECTOS…</p></div>';
-
-      const { data, error } = await db
-        .from('projects')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        list.innerHTML = `<div class="empty-table"><h3>ERROR DE DATOS</h3><p>${esc(error.message)}</p></div>`;
-        projects = [];
-        setCount();
-        return;
-      }
-
-      projects = Array.isArray(data) ? data : [];
-      setCount();
+(function(){
+  const db=window.PF_SUPABASE;
+  const token=()=>sessionStorage.getItem('pf_admin_token')||'';
+  const $=s=>document.querySelector(s);
+  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const msg=(el,text,good=false)=>{if(el){el.textContent=text;el.className='form-status '+(good?'good':'')}};
+  let projects=[];
+  async function call(name,args={}){const {data,error}=await db.rpc(name,args);if(error)throw error;return data}
+  async function loadProjects(){
+    try{
+      projects=await call('pf_admin_projects_list',{p_token:token()})||[];
       renderProjects();
-
-      const photoProject = $('#photoProject');
-      if (photoProject) {
-        photoProject.innerHTML = projects.length
-          ? projects.map((p) => `<option value="${escAttr(p.id)}">${esc(p.name)}</option>`).join('')
-          : '<option value="">Crea primero un proyecto</option>';
-      }
-    };
-
-    const renderProjects = () => {
-      if (!projects.length) {
-        list.innerHTML = '<div class="empty-table"><div class="empty-icon">00</div><h3>SIN PROYECTOS</h3><p>Crea el primer proyecto para comenzar.</p></div>';
-        return;
-      }
-
-      list.innerHTML = projects.map((p) => `
-        <div class="data-row">
-          <div>
-            <small>${esc(p.category || '')}${p.location ? ` · ${esc(p.location)}` : ''}</small>
-            <strong>${esc(p.name)}</strong>
-            <span>${esc(p.description || '')}</span>
-            <span class="admin-badge">${p.published ? 'PUBLICADO' : 'OCULTO'}</span>
-          </div>
-          <div class="row-actions">
-            <button type="button" data-pf-edit="${escAttr(p.id)}">EDITAR</button>
-            <button type="button" data-pf-publish="${escAttr(p.id)}">${p.published ? 'OCULTAR' : 'PUBLICAR'}</button>
-            <button type="button" class="danger" data-pf-delete="${escAttr(p.id)}">ELIMINAR</button>
-          </div>
-        </div>
-      `).join('');
-
-      $$('[data-pf-edit]').forEach((b) => b.addEventListener('click', () => openProject(b.dataset.pfEdit)));
-      $$('[data-pf-publish]').forEach((b) => b.addEventListener('click', () => togglePublish(b.dataset.pfPublish)));
-      $$('[data-pf-delete]').forEach((b) => b.addEventListener('click', () => deleteProject(b.dataset.pfDelete)));
-    };
-
-    const openProject = (id = '') => {
-      const project = projects.find((p) => String(p.id) === String(id));
-      $('#projectId').value = project?.id || '';
-      $('#projectName').value = project?.name || '';
-      $('#projectCategory').value = project?.category || 'BOXES';
-      $('#projectLocation').value = project?.location || '';
-      $('#projectDate').value = project?.event_date || '';
-      $('#projectDescription').value = project?.description || '';
-      $('#projectPublished').checked = project?.published ?? true;
-      $('#modalTitle').textContent = project ? 'EDITAR PROYECTO' : 'NUEVO PROYECTO';
-      setStatus('');
-      modal.hidden = false;
-      $('#projectName').focus();
-    };
-
-    const togglePublish = async (id) => {
-      const project = projects.find((p) => String(p.id) === String(id));
-      if (!project) return;
-      const button = document.querySelector(`[data-pf-publish="${CSS.escape(String(id))}"]`);
-      if (button) button.disabled = true;
-
-      const { error } = await db.from('projects').update({
-        published: !project.published,
-        updated_at: new Date().toISOString()
-      }).eq('id', id);
-
-      if (button) button.disabled = false;
-      if (error) {
-        window.alert(`No se pudo cambiar la publicación: ${error.message}`);
-        return;
-      }
-      await loadProjects();
-    };
-
-    const deleteProject = async (id) => {
-      const project = projects.find((p) => String(p.id) === String(id));
-      if (!project) return;
-      if (!window.confirm(`¿Eliminar el proyecto "${project.name}" y todas sus fotografías?`)) return;
-
-      const { data: photos } = await db.from('photos').select('storage_path').eq('project_id', id);
-      const paths = (photos || []).map((p) => p.storage_path).filter(Boolean);
-      if (paths.length) {
-        await db.storage.from('paquito-photos').remove(paths);
-      }
-      await db.from('photos').delete().eq('project_id', id);
-
-      const { error } = await db.from('projects').delete().eq('id', id);
-      if (error) {
-        window.alert(`No se pudo eliminar: ${error.message}`);
-        return;
-      }
-      await loadProjects();
-    };
-
-    newBtn.onclick = () => openProject();
-
-    $$('[data-close="projectModal"]').forEach((button) => {
-      button.addEventListener('click', () => { modal.hidden = true; });
-    });
-
-    window.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') modal.hidden = true;
-    });
-
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-
-      const name = $('#projectName').value.trim();
-      if (!name) {
-        setStatus('El nombre del proyecto es obligatorio.');
-        $('#projectName').focus();
-        return;
-      }
-
-      const saveButton = form.querySelector('button[type="submit"]');
-      if (saveButton) saveButton.disabled = true;
-      setStatus('GUARDANDO PROYECTO…');
-
-      const payload = {
-        name,
-        category: $('#projectCategory').value,
-        location: $('#projectLocation').value.trim(),
-        event_date: $('#projectDate').value || null,
-        description: $('#projectDescription').value.trim(),
-        published: $('#projectPublished').checked,
-        updated_at: new Date().toISOString()
-      };
-
-      const id = $('#projectId').value;
-      const result = id
-        ? await db.from('projects').update(payload).eq('id', id).select().single()
-        : await db.from('projects').insert(payload).select().single();
-
-      if (saveButton) saveButton.disabled = false;
-
-      if (result.error) {
-        console.error('Error guardando proyecto:', result.error);
-        setStatus(`NO SE PUDO GUARDAR: ${result.error.message}`);
-        return;
-      }
-
-      modal.hidden = true;
-      await loadProjects();
-    });
-
-    await loadProjects();
-  });
+      const select=$('#photoProject');
+      if(select)select.innerHTML=projects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')||'<option value="">Crea primero un proyecto</option>';
+      const count=$('#countProjects');if(count)count.textContent=projects.length;
+      if(window.state)window.state.projects=projects;
+      return projects;
+    }catch(e){
+      const el=$('#projectList');if(el)el.innerHTML=`<div class="empty-table"><h3>ERROR DE DATOS</h3><p>${esc(e.message||'No se pudieron cargar los proyectos.')}</p></div>`;
+      return [];
+    }
+  }
+  function renderProjects(){
+    const el=$('#projectList');if(!el)return;
+    if(!projects.length){el.innerHTML='<div class="empty-table"><div class="empty-icon">00</div><h3>SIN PROYECTOS</h3><p>Crea el primer proyecto para comenzar.</p></div>';return}
+    el.innerHTML=projects.map(p=>`<div class="data-row"><div><small>${esc(p.category)} · ${esc(p.location||'')}</small><strong>${esc(p.name)}</strong><span>${esc(p.description||'')}</span><span class="admin-badge">${p.published?'PUBLICADO':'OCULTO'}</span></div><div class="row-actions"><button data-pf-edit="${p.id}">EDITAR</button><button data-pf-delete="${p.id}" class="danger">ELIMINAR</button><button data-pf-publish="${p.id}">${p.published?'OCULTAR':'PUBLICAR'}</button></div></div>`).join('');
+    el.querySelectorAll('[data-pf-edit]').forEach(b=>b.onclick=()=>openProject(b.dataset.pfEdit));
+    el.querySelectorAll('[data-pf-delete]').forEach(b=>b.onclick=()=>deleteProject(b.dataset.pfDelete));
+    el.querySelectorAll('[data-pf-publish]').forEach(b=>b.onclick=()=>togglePublish(b.dataset.pfPublish));
+  }
+  function openProject(id){
+    const p=projects.find(x=>x.id===id);
+    $('#projectId').value=p?.id||'';$('#projectName').value=p?.name||'';$('#projectCategory').value=p?.category||'BOXES';$('#projectLocation').value=p?.location||'';$('#projectDate').value=p?.event_date||'';$('#projectDescription').value=p?.description||'';$('#projectPublished').checked=p?.published??true;$('#modalTitle').textContent=p?'EDITAR PROYECTO':'NUEVO PROYECTO';$('#projectStatus').textContent='';$('#projectModal').hidden=false;
+  }
+  async function saveProject(e){
+    e.preventDefault();
+    const payload={p_token:token(),p_name:$('#projectName').value.trim(),p_category:$('#projectCategory').value,p_location:$('#projectLocation').value.trim(),p_event_date:$('#projectDate').value||'',p_description:$('#projectDescription').value.trim(),p_published:$('#projectPublished').checked};
+    try{if($('#projectId').value){await call('pf_admin_project_update',{...payload,p_id:$('#projectId').value})}else{await call('pf_admin_project_create',payload)}$('#projectModal').hidden=true;await loadProjects();}
+    catch(err){msg($('#projectStatus'),'No se pudo guardar: '+(err.message||err))}
+  }
+  async function deleteProject(id){
+    if(!confirm('¿Eliminar este proyecto y todas sus fotografías?'))return;
+    try{await call('pf_admin_project_delete',{p_token:token(),p_id:id});await loadProjects();}
+    catch(err){alert('No se pudo eliminar: '+(err.message||err))}
+  }
+  async function togglePublish(id){
+    const p=projects.find(x=>x.id===id);if(!p)return;
+    try{await call('pf_admin_project_update',{p_token:token(),p_id:id,p_name:p.name,p_category:p.category,p_location:p.location||'',p_event_date:p.event_date||'',p_description:p.description||'',p_published:!p.published});await loadProjects();}
+    catch(err){alert('No se pudo cambiar la publicación: '+(err.message||err))}
+  }
+  function boot(){
+    const form=$('#projectForm');if(form){const clone=form.cloneNode(true);form.replaceWith(clone);$('#projectForm').addEventListener('submit',saveProject)}
+    const btn=$('#newProjectBtn');if(btn){const clone=btn.cloneNode(true);btn.replaceWith(clone);$('#newProjectBtn').onclick=()=>openProject()}
+    window.pfProjects={loadProjects,openProject,saveProject,deleteProject,togglePublish};
+    loadProjects();
+  }
+  window.pfProjectsBoot=boot;
+  document.addEventListener('DOMContentLoaded',boot,{once:true});
 })();
