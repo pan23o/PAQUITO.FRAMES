@@ -1,13 +1,12 @@
 {
-  "redirects": [
-    { "source": "/admin", "destination": "/admin/", "permanent": false }
-  ],
   "rewrites": [
     { "source": "/", "destination": "/paquito-frames/index.html" },
     { "source": "/portfolio.html", "destination": "/paquito-frames/portfolio.html" },
     { "source": "/css/:path*", "destination": "/paquito-frames/css/:path*" },
     { "source": "/js/:path*", "destination": "/paquito-frames/js/:path*" },
     { "source": "/assets/:path*", "destination": "/paquito-frames/assets/:path*" },
+    { "source": "/admin", "destination": "/paquito-frames/admin/index.html" },
+    { "source": "/admin/", "destination": "/paquito-frames/admin/index.html" },
     { "source": "/admin/:path*", "destination": "/paquito-frames/admin/:path*" },
     { "source": "/portfolio/:path*", "destination": "/paquito-frames/:path*" }
   ]
