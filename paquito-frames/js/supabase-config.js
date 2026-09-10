@@ -1,17 +1,39 @@
-window.PF_SUPABASE_URL='https://djfjqecahztogacliavh.supabase.co';
-window.PF_SUPABASE_KEY='sb_publishable_tm8Tid_HSYtu6cxXQ3ddKA_RWN15BSB';
-window.PF_SUPABASE=window.supabase.createClient(window.PF_SUPABASE_URL,window.PF_SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+window.PF_SUPABASE_URL='https://ehbtqqphpoglufwoazwp.supabase.co';
+window.PF_SUPABASE_KEY='sb_publishable_qMuZQMoKd3wjJeMfktLfmw_7E8NL5pY';
+window.PF_SUPABASE=window.supabase.createClient(window.PF_SUPABASE_URL,window.PF_SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
 
-// El panel de administración usa admin.js como controlador principal.
-// Dejamos un controlador de respaldo para el bloque de Proyectos por si el
-// navegador conserva una versión antigua de admin.js.
-document.addEventListener('DOMContentLoaded',()=>{
-  const projectButton=document.getElementById('newProjectBtn');
-  if(!projectButton)return;
-  if(document.querySelector('script[data-pf-project-fallback]'))return;
-  const script=document.createElement('script');
-  script.src='../admin/admin-projects.js?v=20260910-2';
-  script.async=false;
-  script.dataset.pfProjectFallback='1';
-  document.body.appendChild(script);
-});
+(function(){
+  const db=window.PF_SUPABASE;
+  document.addEventListener('submit',async function(e){
+    const form=e.target;if(!form||form.id!=='loginForm')return;
+    e.preventDefault();e.stopImmediatePropagation();
+    const name=document.getElementById('adminName'),pass=document.getElementById('adminPassword'),status=document.getElementById('loginStatus');
+    const button=form.querySelector('button[type="submit"]');if(button)button.disabled=true;
+    if(status)status.textContent='COMPROBANDO ACCESO…';
+    try{
+      const {data,error}=await db.rpc('pf_admin_login',{p_username:name.value,p_password:pass.value});
+      if(error||!data){if(status)status.textContent='NOMBRE O CONTRASEÑA INCORRECTOS.';return}
+      sessionStorage.setItem('pf_admin_token',data);
+      sessionStorage.removeItem('pf_admin_ok');
+      pass.value='';
+      document.getElementById('loginView').hidden=true;document.getElementById('appView').hidden=false;
+      if(status)status.textContent='ACCESO CORRECTO.';
+      if(window.pfProjectsBoot)window.pfProjectsBoot();
+    }catch(err){console.error(err);if(status)status.textContent='ERROR AL COMPROBAR EL ACCESO.'}
+    finally{if(button)button.disabled=false}
+  },true);
+
+  document.addEventListener('click',async function(e){
+    const btn=e.target.closest?.('#logoutBtn');if(!btn)return;
+    e.preventDefault();e.stopImmediatePropagation();
+    const t=sessionStorage.getItem('pf_admin_token');
+    if(t){try{await db.rpc('pf_admin_logout',{p_token:t})}catch(err){console.warn(err)}}
+    sessionStorage.removeItem('pf_admin_token');sessionStorage.removeItem('pf_admin_ok');
+    document.getElementById('appView').hidden=true;document.getElementById('loginView').hidden=false;
+    const s=document.getElementById('loginStatus');if(s)s.textContent='SESIÓN CERRADA.';
+  },true);
+
+  document.addEventListener('DOMContentLoaded',()=>{
+    const script=document.createElement('script');script.src='../admin/admin-projects.js?v=20260910-12';script.defer=false;document.body.appendChild(script);
+  },{once:true});
+})();
