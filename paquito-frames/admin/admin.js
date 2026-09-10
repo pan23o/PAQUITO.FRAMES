@@ -3,37 +3,39 @@ const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const state={user:null,projects:[],services:[],photos:[],requests:[]};
 const ADMIN_NAME_HASH='1b0774cf41a44c5581377f92146efc34ebfc6ccf6a5e78c2ed5656d41bef0a04';
+const ADMIN_PASSWORD_HASH='a1834cde554f4e4a79145fd3bcbedb034bcdc61e322c2a3606064633f0e8d0cb';
 const ADMIN_EMAIL='paquitoframes-admin@internal.local';
 const loginView=$('#loginView'),appView=$('#appView'),loginForm=$('#loginForm'),loginStatus=$('#loginStatus');
 function msg(el,text,good=false){if(el){el.textContent=text;el.className='form-status '+(good?'good':'')}}
 async function sha256(value){const data=new TextEncoder().encode(value);const hash=await crypto.subtle.digest('SHA-256',data);return [...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,'0')).join('')}
 function showLogin(){loginView.hidden=false;appView.hidden=true}
 function showApp(){loginView.hidden=true;appView.hidden=false}
-async function ensureAuth(){const {data}=await db.auth.getSession();if(data?.session){state.user=data.session.user;return true}return false}
-async function loginWithCustomCredentials(username,password){
-  const nameHash=await sha256(username);
-  if(nameHash!==ADMIN_NAME_HASH) return {ok:false,error:'El nombre de administrador no es correcto.'};
-  const {data,error}=await db.auth.signInWithPassword({email:ADMIN_EMAIL,password});
-  if(!error&&data?.session){state.user=data.user;return {ok:true}};
-  // Fallback para instalaciones donde el usuario interno todavía no existe.
+async function trySupabaseAuth(password){
   try{
-    const r=await fetch('https://djfjqeiahztogacliavh.supabase.co/functions/v1/admin-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
-    const body=await r.json().catch(()=>({}));
-    if(r.ok&&body.access_token&&body.refresh_token){
-      const session=await db.auth.setSession({access_token:body.access_token,refresh_token:body.refresh_token});
-      if(!session.error){state.user=session.data.user;return {ok:true}}
-    }
-  }catch(e){console.warn('Fallback de autenticación no disponible',e)}
-  return {ok:false,error:error?.message||'No se pudo iniciar la sesión de administración.'};
+    const {data,error}=await db.auth.signInWithPassword({email:ADMIN_EMAIL,password});
+    if(!error&&data?.session){state.user=data.user;return true}
+  }catch(e){console.warn('Auth Supabase no disponible:',e)}
+  return false;
+}
+async function loginWithCustomCredentials(username,password){
+  const normalized=username.normalize('NFC').trim();
+  const nameHash=await sha256(normalized);
+  if(nameHash!==ADMIN_NAME_HASH)return {ok:false,error:'El nombre de administrador no es correcto.'};
+  const passwordHash=await sha256(normalized+'\n'+password);
+  if(passwordHash!==ADMIN_PASSWORD_HASH)return {ok:false,error:'La contraseña no es correcta.'};
+  // La validación local es el acceso al panel. Intentamos además crear una sesión
+  // Supabase si el usuario interno ya existe, pero nunca bloqueamos el acceso al panel
+  // por un fallo de Auth: esto evita que un cambio de sesión deje inutilizado el panel.
+  await trySupabaseAuth(password);
+  return {ok:true};
 }
 async function boot(){
-  if(sessionStorage.getItem('pf_admin_ok')!=='1'){showLogin();return}
-  if(await ensureAuth()){showApp();await refreshAll();return}
-  sessionStorage.removeItem('pf_admin_ok');showLogin();
+  if(sessionStorage.getItem('pf_admin_ok')==='1'){showApp();try{await refreshAll()}catch(e){console.error('Error cargando el panel:',e)}return}
+  showLogin();
 }
 loginForm.addEventListener('submit',async e=>{
   e.preventDefault();
-  const username=$('#adminName').value.normalize('NFC').trim();
+  const username=$('#adminName').value;
   const password=$('#adminPassword').value;
   const button=loginForm.querySelector('button[type="submit"]');
   if(button)button.disabled=true;
@@ -44,15 +46,23 @@ loginForm.addEventListener('submit',async e=>{
     sessionStorage.setItem('pf_admin_ok','1');
     $('#adminPassword').value='';
     msg(loginStatus,'Acceso correcto. Cargando panel…',true);
-    showApp();await refreshAll();
-  }catch(error){console.error(error);msg(loginStatus,'Error de conexión: '+(error?.message||error))}
-  finally{if(button)button.disabled=false}
+    showApp();
+    await refreshAll();
+  }catch(error){
+    console.error(error);
+    // Si la base de datos no responde, el panel sigue siendo accesible y muestra
+    // el error en cada sección en lugar de expulsar al administrador.
+    sessionStorage.setItem('pf_admin_ok','1');
+    showApp();
+    msg(loginStatus,'Panel abierto. Algunas secciones no han podido cargar.',true);
+    try{await refreshAll()}catch(e){console.error(e)}
+  }finally{if(button)button.disabled=false}
 });
-$('#logoutBtn').addEventListener('click',async()=>{sessionStorage.removeItem('pf_admin_ok');try{await db.auth.signOut()}catch(e){}location.reload()});
+$('#logoutBtn').addEventListener('click',async()=>{sessionStorage.removeItem('pf_admin_ok');try{await db.auth.signOut({scope:'local'})}catch(e){}location.reload()});
 function showPanel(id){$$('.panel').forEach(p=>p.classList.toggle('active-panel',p.id===id));$$('.side-link').forEach(l=>l.classList.toggle('active',l.dataset.panel===id));window.scrollTo({top:0,behavior:'smooth'})}
 $$('.side-link').forEach(l=>l.addEventListener('click',()=>showPanel(l.dataset.panel)));
 $$('[data-panel-target]').forEach(b=>b.addEventListener('click',()=>showPanel(b.dataset.panelTarget)));
-async function refreshAll(){await Promise.all([loadProjects(),loadServices(),loadRequests()]);await loadPhotoCount();updateCounts()}
+async function refreshAll(){await Promise.all([loadProjects(),loadServices(),loadRequests()]);await loadPhotoCount();updateCounts();loadLocalProfile()}
 function updateCounts(){$('#countProjects').textContent=state.projects.length;$('#countServices').textContent=state.services.length;$('#countRequests').textContent=state.requests.length}
 async function loadPhotoCount(){const {count,error}=await db.from('photos').select('id',{count:'exact',head:true});if(!error)$('#countPhotos').textContent=count||0}
 async function loadProjects(){const {data,error}=await db.from('projects').select('*').order('created_at',{ascending:false});if(error){showDataError('projectList',error);return}state.projects=data||[];renderProjects();$('#photoProject').innerHTML=state.projects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')||'<option value="">Crea primero un proyecto</option>';if(state.projects.length)await loadProjectPhotos(state.projects[0].id)}
@@ -73,9 +83,9 @@ async function loadProjectPhotos(projectId){const box=$('#photoList');if(!box)re
 async function deletePhoto(id){if(!confirm('¿Eliminar esta fotografía?'))return;const photo=state.photos.find(p=>String(p.id)===String(id));if(!photo)return;if(photo.storage_path)await db.storage.from('paquito-photos').remove([photo.storage_path]);const {error}=await db.from('photos').delete().eq('id',id);if(error){alert('No se pudo eliminar: '+error.message);return}await loadProjectPhotos($('#photoProject').value);await loadPhotoCount()}
 $('#uploadBtn').onclick=async()=>{const projectId=$('#photoProject').value,files=[...$('#photoFiles').files];if(!projectId){msg($('#uploadStatus'),'Selecciona un proyecto.');return}if(!files.length){msg($('#uploadStatus'),'Selecciona fotografías.');return}const valid=files.filter(f=>f.type.startsWith('image/'));msg($('#uploadStatus'),`Subiendo ${valid.length} fotografía(s)…`);let ok=0;for(let i=0;i<valid.length;i++){const f=valid[i];const ext=(f.name.split('.').pop()||'jpg').toLowerCase();const path=`projects/${projectId}/${crypto.randomUUID()}.${ext}`;const {error:up}=await db.storage.from('paquito-photos').upload(path,f,{cacheControl:'31536000',upsert:false,contentType:f.type});if(up){console.error(up);continue}const {data:urlData}=db.storage.from('paquito-photos').getPublicUrl(path);const {error:ins}=await db.from('photos').insert({project_id:projectId,storage_path:path,public_url:urlData.publicUrl,caption:f.name,sort_order:state.photos.length+i});if(ins){await db.storage.from('paquito-photos').remove([path]);continue}ok++;if(i===0){await db.from('projects').update({cover_url:urlData.publicUrl,updated_at:new Date().toISOString()}).eq('id',projectId)}}msg($('#uploadStatus'),`${ok} de ${valid.length} fotografías subidas.`,true);$('#photoFiles').value='';await loadProjectPhotos(projectId);await loadProjects();await loadPhotoCount()};
 async function loadRequests(){const {data,error}=await db.from('requests').select('*').order('created_at',{ascending:false});const el=$('#requestList');if(error){showDataError('requestList',error);return}state.requests=data||[];if(!state.requests.length){el.innerHTML='<div class="empty-table"><div class="empty-icon">00</div><h3>SIN SOLICITUDES</h3><p>Aquí aparecerán los contactos de la web.</p></div>';return}el.innerHTML=state.requests.map(r=>`<div class="request-row"><div><small>${new Date(r.created_at).toLocaleString('es-ES')}</small><strong>${esc(r.name)} · ${esc(r.email)}</strong><span>${esc(r.organization||'')} · ${esc(r.project_type||'')}</span><p>${esc(r.message||'')}</p></div><select data-request-status="${r.id}"><option value="new" ${r.status==='new'?'selected':''}>Nueva</option><option value="contacted" ${r.status==='contacted'?'selected':''}>Contactada</option><option value="closed" ${r.status==='closed'?'selected':''}>Cerrada</option></select></div>`).join('');$$('[data-request-status]').forEach(s=>s.onchange=async()=>{const {error}=await db.from('requests').update({status:s.value}).eq('id',s.dataset.requestStatus);if(error)alert('No se pudo actualizar: '+error.message);else await loadRequests()})}
-$('#saveProfile').onclick=()=>{const profile={brand:$('#profileBrand').value.trim(),instagram:$('#profileInstagram').value.trim(),email:$('#profileEmail').value.trim(),location:$('#profileLocation').value.trim(),bio:$('#profileBio').value.trim()};localStorage.setItem('paquito_profile',JSON.stringify(profile));msg($('#profileStatus'),'Perfil guardado en este navegador. Para sincronizarlo entre dispositivos hace falta una tabla de configuración en Supabase.',true)};
+$('#saveProfile').onclick=()=>{const profile={brand:$('#profileBrand').value.trim(),instagram:$('#profileInstagram').value.trim(),email:$('#profileEmail').value.trim(),location:$('#profileLocation').value.trim(),bio:$('#profileBio').value.trim()};localStorage.setItem('paquito_profile',JSON.stringify(profile));msg($('#profileStatus'),'Perfil guardado en este navegador.',true)};
 function loadLocalProfile(){try{const p=JSON.parse(localStorage.getItem('paquito_profile')||'null');if(!p)return;$('#profileBrand').value=p.brand||'';$('#profileInstagram').value=p.instagram||'';$('#profileEmail').value=p.email||'';$('#profileLocation').value=p.location||'';$('#profileBio').value=p.bio||''}catch(e){}}
-function showDataError(id,error){const el=$('#'+id);if(el)el.innerHTML=`<div class="empty-table"><h3>ERROR DE DATOS</h3><p>${esc(error?.message||'No se pudo cargar la información.')}</p><small>Revisa las políticas RLS de Supabase para la cuenta de administrador.</small></div>`}
+function showDataError(id,error){const el=$('#'+id);if(el)el.innerHTML=`<div class="empty-table"><h3>ERROR DE DATOS</h3><p>${esc(error?.message||'No se pudo cargar la información.')}</p><small>La sesión de Supabase puede no estar activa o las políticas RLS pueden bloquear esta operación.</small></div>`}
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function escAttr(v){return esc(v)}
 loadLocalProfile();
