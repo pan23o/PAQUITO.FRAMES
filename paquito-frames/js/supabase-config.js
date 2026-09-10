@@ -19,6 +19,7 @@ window.PF_SUPABASE=window.supabase.createClient(window.PF_SUPABASE_URL,window.PF
       document.getElementById('loginView').hidden=true;document.getElementById('appView').hidden=false;
       if(status)status.textContent='ACCESO CORRECTO.';
       if(window.pfProjectsBoot)window.pfProjectsBoot();
+      if(window.pfPhotosBoot)window.pfPhotosBoot();
     }catch(err){console.error(err);if(status)status.textContent='ERROR AL COMPROBAR EL ACCESO.'}
     finally{if(button)button.disabled=false}
   },true);
@@ -34,6 +35,7 @@ window.PF_SUPABASE=window.supabase.createClient(window.PF_SUPABASE_URL,window.PF
   },true);
 
   document.addEventListener('DOMContentLoaded',()=>{
-    const script=document.createElement('script');script.src='../admin/admin-projects.js?v=20260910-12';script.defer=false;document.body.appendChild(script);
+    const projects=document.createElement('script');projects.src='../admin/admin-projects.js?v=20260910-12';projects.defer=false;document.body.appendChild(projects);
+    const photos=document.createElement('script');photos.src='../admin/admin-photos.js?v=20260910-1';photos.defer=false;document.body.appendChild(photos);
   },{once:true});
 })();
