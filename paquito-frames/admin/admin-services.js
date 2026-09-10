@@ -1,0 +1,16 @@
+(()=>{
+ const db=window.PF_SUPABASE,$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+ const token=()=>sessionStorage.getItem('pf_admin_token');
+ const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+ const escAttr=v=>esc(v);
+ const msg=(el,t,good=false)=>{if(el){el.textContent=t;el.className='form-status '+(good?'good':'')}};
+ let services=[];
+ async function load(){const t=token(),el=$('#serviceList');if(!t){el.innerHTML='<div class="empty-table">Inicia sesión para gestionar los servicios.</div>';return}const {data,error}=await db.rpc('pf_admin_services_list',{p_token:t});if(error){el.innerHTML='<div class="empty-table"><h3>ERROR DE DATOS</h3><p>'+esc(error.message)+'</p></div>';return}services=data||[];render();if(window.pfUpdateCounts)window.pfUpdateCounts();}
+ function render(){const el=$('#serviceList');if(!services.length){el.innerHTML='<div class="empty-table"><h3>SIN SERVICIOS</h3><p>Crea el primer servicio.</p></div>';return}el.innerHTML=services.map(s=>`<div class="service-edit" data-service="${s.id}"><span>${String(s.sort_order).padStart(2,'0')}</span><div><input class="svc-name" value="${escAttr(s.name)}"><textarea class="svc-desc">${esc(s.description||'')}</textarea></div><input class="svc-price" value="${escAttr(s.price||'')}" placeholder="Precio"><label class="svc-active"><input class="svc-on" type="checkbox" ${s.active?'checked':''}> ACTIVO</label><button class="primary save-service">GUARDAR</button><button class="danger delete-service">ELIMINAR</button></div>`).join('');$$('.save-service').forEach(b=>b.onclick=()=>save(b.closest('.service-edit')));$$('.delete-service').forEach(b=>b.onclick=()=>del(b.closest('.service-edit').dataset.service));}
+ async function save(row){const t=token();if(!t)return;const {error}=await db.rpc('pf_admin_service_update',{p_token:t,p_id:row.dataset.service,p_name:row.querySelector('.svc-name').value.trim(),p_description:row.querySelector('.svc-desc').value.trim(),p_price:row.querySelector('.svc-price').value.trim(),p_sort_order:services.find(s=>s.id===row.dataset.service)?.sort_order||0,p_active:row.querySelector('.svc-on').checked});if(error){alert('No se pudo guardar: '+error.message);return}await load()}
+ async function del(id){if(!confirm('¿Eliminar este servicio?'))return;const t=token();const {error}=await db.rpc('pf_admin_service_delete',{p_token:t,p_id:id});if(error){alert('No se pudo eliminar: '+error.message);return}await load()}
+ async function create(){const t=token();const {error}=await db.rpc('pf_admin_service_create',{p_token:t,p_name:'NUEVO SERVICIO',p_description:'',p_price:'',p_sort_order:services.length+1,p_active:true});if(error){alert('No se pudo crear: '+error.message);return}await load()}
+ function boot(){const b=$('#newServiceBtn');if(!b)return;const clone=b.cloneNode(true);b.replaceWith(clone);clone.onclick=create;load()}
+ window.pfServicesBoot=boot;
+ document.addEventListener('DOMContentLoaded',boot,{once:true});
+})();
