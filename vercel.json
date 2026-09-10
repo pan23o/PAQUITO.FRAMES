@@ -1,4 +1,7 @@
 {
+  "redirects": [
+    { "source": "/admin", "destination": "/admin/", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/", "destination": "/paquito-frames/index.html" },
     { "source": "/portfolio.html", "destination": "/paquito-frames/portfolio.html" },
