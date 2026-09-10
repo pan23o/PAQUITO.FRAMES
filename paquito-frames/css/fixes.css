@@ -1,0 +1,8 @@
+/* PAQUITO.FRAMES — correcciones visuales y navegación */
+.contact-section h2 em{-webkit-text-stroke-color:#0a0b0c!important;color:transparent!important}
+.brand{cursor:pointer}
+.real-photo{background-color:#181a1c!important}
+.real-photo.has-cover{background-size:cover!important;background-position:center!important}
+.real-photo.no-cover{background-image:linear-gradient(135deg,#1b1d20,#34383c 45%,#0d0e0f)!important}
+.project-image.live-image{background-color:#181a1c}
+@media(max-width:900px){.site-header .brand{z-index:2}.nav a{font-size:11px}}
