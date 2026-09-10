@@ -1,0 +1,6 @@
+/* Logo real: el PNG contiene mucho espacio transparente alrededor del diseño. Escalamos el contenido dentro de una ventana controlada para que el logo visible tenga un tamaño real de cabecera. */
+.site-header .brand{width:250px;height:82px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 250px}
+.site-header .brand img{width:250px;height:82px;max-width:none;max-height:none;object-fit:contain;display:block;transform:scale(5);transform-origin:center center}
+@media(max-width:1100px){.site-header .brand{width:220px;flex-basis:220px}.site-header .brand img{width:220px;height:76px;transform:scale(4.5)}}
+@media(max-width:900px){.site-header .brand{width:190px;height:68px;flex-basis:190px}.site-header .brand img{width:190px;height:68px;transform:scale(4)}}
+@media(max-width:520px){.site-header .brand{width:170px;height:62px;flex-basis:170px}.site-header .brand img{width:170px;height:62px;transform:scale(3.6)}}
