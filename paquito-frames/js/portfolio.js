@@ -1,41 +1,10 @@
-const filters = document.querySelectorAll('.filter');
-const projects = document.querySelectorAll('.project');
-const lightbox = document.getElementById('lightbox');
-const close = document.getElementById('closeLightbox');
-const lightboxVisual = document.getElementById('lightboxVisual');
-const lightboxTitle = document.getElementById('lightboxTitle');
-const lightboxMeta = document.getElementById('lightboxMeta');
-
-function openProject(card){
-  const image = card.querySelector('.project-image');
-  const pseudo = getComputedStyle(image, '::before').background;
-  lightboxVisual.style.background = getComputedStyle(image).background;
-  lightboxVisual.style.backgroundImage = pseudo;
-  lightboxTitle.textContent = card.dataset.title || 'PROJECT';
-  lightboxMeta.textContent = card.dataset.meta || '';
-  lightbox.classList.add('open');
-  lightbox.setAttribute('aria-hidden','false');
-  document.body.style.overflow='hidden';
-}
-
-projects.forEach(card => card.addEventListener('click', () => openProject(card)));
-
-function closeProject(){
-  lightbox.classList.remove('open');
-  lightbox.setAttribute('aria-hidden','true');
-  document.body.style.overflow='';
-}
-
-close?.addEventListener('click', closeProject);
-lightbox?.addEventListener('click', e => { if(e.target === lightbox) closeProject(); });
-document.addEventListener('keydown', e => { if(e.key === 'Escape') closeProject(); });
-
-filters.forEach(filter => filter.addEventListener('click', () => {
-  filters.forEach(f => f.classList.remove('active'));
-  filter.classList.add('active');
-  const value = filter.dataset.filter;
-  projects.forEach(project => {
-    const visible = value === 'all' || project.dataset.category === value;
-    project.style.display = visible ? '' : 'none';
-  });
-}));
+const db=window.PF_SUPABASE;
+const grid=document.getElementById('projectGrid'),lightbox=document.getElementById('lightbox'),close=document.getElementById('closeLightbox'),visual=document.getElementById('lightboxVisual'),titleEl=document.getElementById('lightboxTitle'),metaEl=document.getElementById('lightboxMeta'),galleryEl=document.getElementById('lightboxGallery');
+const demo=[['training','THE DAILY GRIND','Training · Gibraltar · 2026','tone-a'],['athletes','NO EASY REPS','Athletes · Gibraltar · 2026','tone-b'],['boxes','BUILT BY COMMUNITY','Boxes · Gibraltar · 2026','tone-c'],['competition','WHEN IT COUNTS','Competition · Gibraltar · 2026','tone-d']];
+let cards=[];
+function renderDemo(){grid.innerHTML=demo.map((x,i)=>`<article class="project ${i===0?'project-large':''}" data-category="${x[0]}" data-title="${x[1]}" data-meta="${x[2]}"><div class="project-image ${x[3]}"><span>${String(i+1).padStart(2,'0')}</span></div><div class="project-meta"><span>${x[0].toUpperCase()}</span><strong>${x[1]}</strong></div></article>`).join('');cards=[...grid.querySelectorAll('.project')];cards.forEach(c=>c.addEventListener('click',()=>openCard(c,[])));}
+async function loadProjects(){if(!db){renderDemo();return}try{const {data,error}=await db.from('projects').select('id,name,category,location,event_date,description,cover_url').eq('published',true).order('created_at',{ascending:false});if(error)throw error;if(!data?.length){renderDemo();return}grid.innerHTML=data.map((p,i)=>`<article class="project ${i===0?'project-large':''}" data-id="${p.id}" data-category="${(p.category||'other').toLowerCase()}" data-title="${esc(p.name)}" data-meta="${esc([p.category,p.location,p.event_date].filter(Boolean).join(' · '))}"><div class="project-image live-image" style="background-image:url('${escAttr(p.cover_url||'')}')"><span>${String(i+1).padStart(2,'0')}</span></div><div class="project-meta"><span>${esc(p.category||'PROJECT')}</span><strong>${esc(p.name)}</strong></div></article>`).join('');cards=[...grid.querySelectorAll('.project')];cards.forEach(c=>c.addEventListener('click',async()=>{const {data:photos}=await db.from('photos').select('public_url,caption').eq('project_id',c.dataset.id).order('sort_order');openCard(c,photos||[])}));const hash=location.hash.slice(1);if(hash){const c=cards.find(x=>x.dataset.id===hash);if(c)c.click()}}catch(e){console.warn(e);renderDemo()}}
+function esc(v){return String(v||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}function escAttr(v){return esc(v).replace(/\)/g,'%29')}
+function openCard(card,photos){titleEl.textContent=card.dataset.title||'PROJECT';metaEl.textContent=card.dataset.meta||'';galleryEl.innerHTML='';visual.style.backgroundImage='';const cover=card.querySelector('.live-image')?.style.backgroundImage;if(cover)visual.style.backgroundImage=cover;else{visual.className='lightbox-visual '+(card.querySelector('.project-image')?.className.split(' ').find(x=>x.startsWith('tone-'))||'');}photos.forEach(p=>{if(!p.public_url)return;const img=document.createElement('img');img.src=p.public_url;img.alt=p.caption||card.dataset.title||'Project';galleryEl.appendChild(img)});lightbox.classList.add('open');lightbox.setAttribute('aria-hidden','false');document.body.style.overflow='hidden'}
+function closeProject(){lightbox.classList.remove('open');lightbox.setAttribute('aria-hidden','true');document.body.style.overflow=''}close?.addEventListener('click',closeProject);lightbox?.addEventListener('click',e=>{if(e.target===lightbox)closeProject()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeProject()});document.querySelectorAll('.filter').forEach(f=>f.addEventListener('click',()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));f.classList.add('active');const v=f.dataset.filter;cards.forEach(c=>c.style.display=v==='all'||c.dataset.category===v?'':'none')}));
+loadProjects();
