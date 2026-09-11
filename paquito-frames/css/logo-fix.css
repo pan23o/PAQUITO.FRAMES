@@ -1,8 +1,59 @@
-/* Logo oficial de PAQUITO.FRAMES. Se usa PNG para conservar la transparencia. */
-.site-header .brand{width:235px;height:82px;display:flex;align-items:center;justify-content:flex-start;overflow:visible;flex:0 0 235px}
-.site-header .brand img{content:url('../assets/logo.png');width:205px;height:auto;max-width:none;max-height:none;object-fit:contain;display:block;transform:none;background:transparent}
-.site-footer .brand{display:flex;align-items:center;width:220px;height:90px;overflow:visible}
-.site-footer .brand img{content:url('../assets/logo.png');width:205px;height:auto;max-width:none;display:block;background:transparent}
-@media(max-width:1100px){.site-header .brand{width:215px;flex-basis:215px}.site-header .brand img{width:190px}}
-@media(max-width:900px){.site-header .brand{width:190px;flex-basis:190px;height:76px}.site-header .brand img{width:175px}}
-@media(max-width:520px){.site-header .brand{width:165px;flex-basis:165px;height:68px}.site-header .brand img{width:155px}.site-footer .brand{width:180px;height:78px}.site-footer .brand img{width:170px}}
+/* PAQUITO.FRAMES — logo limpio y proporcional.
+   No se sustituye el src desde CSS: el HTML carga directamente el SVG transparente.
+   El tamaño se controla con una sola dimensión para conservar la proporción natural. */
+.site-header .brand{
+  width:180px;
+  height:auto;
+  min-height:0;
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  flex:0 0 180px;
+  overflow:visible;
+}
+.site-header .brand img{
+  display:block;
+  width:180px;
+  height:auto;
+  max-width:100%;
+  max-height:none;
+  object-fit:contain;
+  object-position:left center;
+  background:transparent;
+  border:0;
+  padding:0;
+  margin:0;
+}
+.site-footer .brand{
+  width:150px;
+  height:auto;
+  display:flex;
+  align-items:center;
+  overflow:visible;
+}
+.site-footer .brand img{
+  display:block;
+  width:150px;
+  height:auto;
+  max-width:100%;
+  max-height:none;
+  object-fit:contain;
+  background:transparent;
+  border:0;
+  padding:0;
+  margin:0;
+}
+@media(max-width:1100px){
+  .site-header .brand{width:165px;flex-basis:165px}
+  .site-header .brand img{width:165px}
+}
+@media(max-width:900px){
+  .site-header .brand{width:150px;flex-basis:150px}
+  .site-header .brand img{width:150px}
+}
+@media(max-width:520px){
+  .site-header .brand{width:140px;flex-basis:140px}
+  .site-header .brand img{width:140px}
+  .site-footer .brand{width:125px}
+  .site-footer .brand img{width:125px}
+}
