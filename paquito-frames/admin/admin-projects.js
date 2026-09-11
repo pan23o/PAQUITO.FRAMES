@@ -1,5 +1,6 @@
 (function(){
   const db=window.PF_SUPABASE;
+  const API=`${window.PF_SUPABASE_URL}/functions/v1/admin-photos`;
   const token=()=>sessionStorage.getItem('pf_admin_token')||'';
   const $=s=>document.querySelector(s);
   const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -40,8 +41,13 @@
   }
   async function deleteProject(id){
     if(!confirm('¿Eliminar este proyecto y todas sus fotografías?'))return;
-    try{await call('pf_admin_project_delete',{p_token:token(),p_id:id});await loadProjects();}
-    catch(err){alert('No se pudo eliminar: '+(err.message||err))}
+    try{
+      const res=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','x-admin-token':token(),'apikey':window.PF_SUPABASE_KEY},body:JSON.stringify({action:'delete_project',project_id:id})});
+      const body=await res.json().catch(()=>({}));
+      if(!res.ok)throw new Error(body.detail||body.error||'No se pudo eliminar el proyecto.');
+      await loadProjects();
+      if(window.pfPhotosBoot)await window.pfPhotosBoot();
+    }catch(err){alert('No se pudo eliminar: '+(err.message||err))}
   }
   async function togglePublish(id){
     const p=projects.find(x=>x.id===id);if(!p)return;
